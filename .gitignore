@@ -1,0 +1,6 @@
+﻿__pycache__/
+logs/
+snapshots/
+*.db
+*.pyc
+.venv310/
