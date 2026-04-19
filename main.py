@@ -260,7 +260,7 @@ else:
 	loss_func = F.cross_entropy
 
 	# 9. create enterprises in the network
-	enterprises_in_network = EnterprisesInNetwork(data_set_name='femnist', is_iid=args['IID'], batch_size = args['batchsize'], learning_rate =  args['learning_rate'], loss_func = loss_func, opti = args['optimizer'], num_enterprises=num_enterprises, network_stability=args['network_stability'], net=net, dev=dev, knock_out_rounds=args['knock_out_rounds'], lazy_local_enterprise_knock_out_rounds=args['lazy_local_enterprise_knock_out_rounds'], shard_test_data=args['shard_test_data'], miner_acception_wait_time=args['miner_acception_wait_time'], miner_accepted_transactions_size_limit=args['miner_accepted_transactions_size_limit'], validator_threshold=args['validator_threshold'], pow_difficulty=args['pow_difficulty'], even_link_speed_strength=args['even_link_speed_strength'], base_data_transmission_speed=args['base_data_transmission_speed'], even_computation_power=args['even_computation_power'], malicious_updates_discount=args['malicious_updates_discount'], num_malicious=num_malicious, noise_variance=args['noise_variance'], check_signature=args['check_signature'], not_resync_chain=args['destroy_tx_in_block'], mu=args['mu'], model_name=args['model_name'])
+	enterprises_in_network = EnterprisesInNetwork(data_set_name='femnist', is_iid=args['IID'], batch_size = args['batchsize'], learning_rate =  args['learning_rate'], loss_func = loss_func, opti = args['optimizer'], num_enterprises=num_enterprises, network_stability=args['network_stability'], net=net, dev=dev, knock_out_rounds=args['knock_out_rounds'], lazy_local_enterprise_knock_out_rounds=args['lazy_local_enterprise_knock_out_rounds'], shard_test_data=args['shard_test_data'], miner_acception_wait_time=args['miner_acception_wait_time'], miner_accepted_transactions_size_limit=args['miner_accepted_transactions_size_limit'], validator_threshold=args['validator_threshold'], pow_difficulty=args['pow_difficulty'], even_link_speed_strength=args['even_link_speed_strength'], base_data_transmission_speed=args['base_data_transmission_speed'], even_computation_power=args['even_computation_power'], malicious_updates_discount=args['malicious_updates_discount'], num_malicious=num_malicious, noise_variance=args['noise_variance'], check_signature=args['check_signature'], not_resync_chain=args['destroy_tx_in_block'], mu=0.001, model_name=args['model_name'])
 	del net
 	enterprises_list = list(enterprises_in_network.enterprises_set.values())
 
@@ -313,6 +313,11 @@ else:
 	total_rounds = args['max_num_comm'] - latest_round_num
 	simulation_start_time = time.time()
 	for comm_round in range(latest_round_num + 1, args['max_num_comm']+1):
+		# Auto LR Decay: 50% every 8 rounds to help settling on plateau
+		if comm_round > 1 and (comm_round - latest_round_num) % 8 == 0:
+			for e in enterprises_list:
+				e.learning_rate *= 0.5
+			print(f"\n[SYSTEM] Learning rate decayed to {enterprises_list[0].learning_rate:.6f} for round {comm_round}")
 		communication_bytes_per_round = 0
 		# create round specific log folder
 		log_files_folder_path_comm_round = f"{log_files_folder_path}/comm_{comm_round}"
@@ -812,11 +817,31 @@ else:
 				print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} did not receive any transaction from validator or miner in this round.")
 
 		print(''' Step 6 - miners decide if adding a propagated block or its own mined block as the legitimate block, and request its associated enterprises to download this block''')
-		forking_happened = False
-		# comm_round_block_gen_time regarded as the time point when the winning miner mines its block, calculated from the beginning of the round. If there is forking in PoW or rewards info out of sync in PoS, this time is the avg time point of all the appended time by any enterprise
+		# Forking Prevention for Optimized Runs
 		comm_round_block_gen_time = []
+		global_winning_block = None
+		earliest_mining_time = float('inf')
+		
+		# Find the global winning block (earliest mined) across all miners
+		for m in miners_this_round:
+			m_mined_block = m.return_mined_block()
+			if m_mined_block:
+				m_time = m.return_block_generation_time_point()
+				if m_time < earliest_mining_time:
+					earliest_mining_time = m_time
+					global_winning_block = m_mined_block
+		
 		for miner_iter in range(len(miners_this_round)):
 			miner = miners_this_round[miner_iter]
+			if global_winning_block:
+				# Force all nodes to synchronize on the global winning block
+				verified_block, verification_time = miner.verify_block(global_winning_block, global_winning_block.return_mined_by())
+				if verified_block:
+					miner.add_block(verified_block)
+					miner.request_to_download(verified_block, earliest_mining_time + verification_time)
+					continue
+
+			# Fallback to original logic if no global winner found (unlikely in this sim)
 			unordered_propagated_block_processing_queue = miner.return_unordered_propagated_block_processing_queue()
 			# add self mined block to the processing queue and sort by time
 			this_miner_mined_block = miner.return_mined_block()

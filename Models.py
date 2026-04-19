@@ -78,8 +78,8 @@ cnn = nn.Sequential(
     nn.MaxPool2d(kernel_size=2, stride=2, padding=0),
     nn.Flatten(),
     nn.Linear(3136, 512),
-    nn.Linear(512, 10),
     nn.ReLU(),
+    nn.Linear(512, 10),
 )
 
 # Define concatenated model
