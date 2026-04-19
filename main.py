@@ -12,7 +12,6 @@ import pickle
 from pathlib import Path
 import shutil
 import gc
-from tqdm.auto import tqdm
 # FedAnil+: Smart Accelerator Detection (CUDA/TPU/CPU)
 try:
     import torch_xla.core.xla_model as xm
@@ -313,7 +312,7 @@ else:
 	# FedAnil+ starts here
 	total_rounds = args['max_num_comm'] - latest_round_num
 	simulation_start_time = time.time()
-	for comm_round in tqdm(range(latest_round_num + 1, args['max_num_comm']+1), desc="Total Rounds", position=0, leave=True):
+	for comm_round in range(latest_round_num + 1, args['max_num_comm']+1):
 		communication_bytes_per_round = 0
 		# create round specific log folder
 		log_files_folder_path_comm_round = f"{log_files_folder_path}/comm_{comm_round}"
@@ -324,6 +323,26 @@ else:
 		gc.collect()
 		if dev.type == 'cuda':
 			torch.cuda.empty_cache()
+		
+		# ========== PROGRESS BAR ==========
+		rounds_done = comm_round - latest_round_num - 1
+		progress = rounds_done / total_rounds
+		elapsed = time.time() - simulation_start_time
+		if rounds_done > 0:
+			eta = (elapsed / rounds_done) * (total_rounds - rounds_done)
+			eta_str = f"{int(eta//60)}m {int(eta%60)}s"
+		else:
+			eta_str = "calculating..."
+		elapsed_str = f"{int(elapsed//60)}m {int(elapsed%60)}s"
+		bar_len = 30
+		filled = int(bar_len * progress)
+		bar = '█' * filled + '░' * (bar_len - filled)
+		print(f"\n{'='*60}")
+		print(f"  [{bar}] {progress*100:.1f}% | Round {comm_round}/{args['max_num_comm']}")
+		print(f"  Elapsed: {elapsed_str} | ETA: {eta_str} | Best Acc: {total_accuracy*100:.2f}%")
+		print(f"{'='*60}")
+		# ===================================
+
 		# FedAnil+: Total Computation Cost
 		comm_round_start_time = time.time()
 		# (RE)ASSIGN ROLES
@@ -382,9 +401,6 @@ else:
 
 		''' local_enterprises, validators and miners take turns to perform jobs '''
 		selected_local_enterprises_this_round = local_enterprises_this_round[0:random_selection_num]
-		
-		# ========== ROUND PROGRESS BAR ==========
-		round_pbar = tqdm(total=7, desc=f"Round {comm_round} Steps", position=1, leave=False, ncols=80)
 		
 		print(f"SELECTION : {random_selection_num} of {local_enterprises_needed}")
 		print(''' Step 1 - local_enterprises assign associated miner and validator (and do local updates, but it is implemented in code block of step 2) \n''')
@@ -456,7 +472,6 @@ else:
 				else:
 					print(f"Cannot find a qualified validator in {local_enterprise.return_idx()} peer list.")
 		
-		round_pbar.update(1)
 		print(''' Step 2 - validators accept local updates and broadcast to other validators in their respective peer lists (local_enterprises local_updates() are called in this step.\n''')
 		for validator_iter in range(len(validators_this_round)):
 			validator = validators_this_round[validator_iter]
@@ -573,7 +588,6 @@ else:
 			else:
 				print("No transactions have been received by this validator, probably due to local_enterprises and/or validators offline or timeout while doing local updates or transmitting updates, or all local_enterprises are in validator's black list.")
 
-		round_pbar.update(1)
 		print(''' Step 2.5 - with the broadcasted local_enterprises transactions, validators decide the final transaction arrival order \n''')
 		for validator_iter in range(len(validators_this_round)):
 			validator = validators_this_round[validator_iter]
@@ -596,7 +610,6 @@ else:
 			validator.set_transaction_for_final_validating_queue(final_transactions_arrival_queue)
 			print(f"{validator.return_idx()} - validator {validator_iter+1}/{len(validators_this_round)} done calculating the ordered final transactions arrival order. Total {len(final_transactions_arrival_queue)} accepted transactions.")
 
-		round_pbar.update(1)
 		print(''' Step 3 - validators do self and cross-validation(validate local updates from local_enterprises) by the order of transaction arrival time.\n''')
 		for validator_iter in range(len(validators_this_round)):
 			validator = validators_this_round[validator_iter]
@@ -623,7 +636,6 @@ else:
 			gc.collect()
 			torch.cuda.empty_cache()
 
-		round_pbar.update(1)
 		print(''' Step 4 - validators send post validation transactions to associated miner and miner broadcasts these to other miners in their respecitve peer lists\n''')
 		for miner_iter in range(len(miners_this_round)):
 			miner = miners_this_round[miner_iter]
@@ -677,7 +689,6 @@ else:
 			miner.set_candidate_transactions_for_final_mining_queue(final_transactions_arrival_queue)
 			print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} done calculating the ordered final transactions arrival order. Total {len(final_transactions_arrival_queue)} accepted transactions.")
 		
-		round_pbar.update(1)
 		print(''' Step 5 - miners do self and cross-verification (verify validators' signature) by the order of transaction arrival time and record the transactions in the candidate block according to the limit size. Also mine and propagate the block.\n''')
 		for miner_iter in range(len(miners_this_round)):
 			# TPU Sync periodically during mining to prevent memory buildup
@@ -800,7 +811,6 @@ else:
 			else:
 				print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} did not receive any transaction from validator or miner in this round.")
 
-		round_pbar.update(1)
 		print(''' Step 6 - miners decide if adding a propagated block or its own mined block as the legitimate block, and request its associated enterprises to download this block''')
 		forking_happened = False
 		# comm_round_block_gen_time regarded as the time point when the winning miner mines its block, calculated from the beginning of the round. If there is forking in PoW or rewards info out of sync in PoS, this time is the avg time point of all the appended time by any enterprise
@@ -888,7 +898,6 @@ else:
 		else:
 			print("No forking event happened.")
 			
-		round_pbar.update(1)
 		print(''' Step 6 last step - process the added block - 1.collect usable updated params\n 2.malicious enterprises identification\n 3.get rewards\n 4.do local udpates\n This code block is skipped if no valid block was generated in this round''')
 		all_enterprises_round_ends_time = []
 		for enterprise in enterprises_list:
@@ -998,7 +1007,6 @@ else:
 			print(f"Saving network snapshot to {snapshot_file_path}")
 			pickle.dump(enterprises_in_network, open(snapshot_file_path, "wb"))
 		
-		round_pbar.close()
 		# FedAnil+: if accuracy reach more than target accuracy the iteration finished
 		if total_accuracy >= target_accuracy:
 			break
