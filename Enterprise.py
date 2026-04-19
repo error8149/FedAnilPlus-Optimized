@@ -731,8 +731,21 @@ class Enterprise:
 					if local_params_record['finally_used_params']:
 						# could be None
 						finally_used_local_params.append((local_enterprise_enterprise_idx, local_params_record['finally_used_params']))
+				
+				# FedAnil+: Memory-Efficient Sync - Use pre-calculated global model if transactions are archived
+				block_transactions = block_to_process.return_transactions()
+				has_precalc_params = ('global_update_params' in block_transactions and block_transactions['global_update_params'] is not None)
+				
 				if self.online_switcher():
-					self.global_update(finally_used_local_params)
+					if has_precalc_params and (not finally_used_local_params or when_resync):
+						# Fast-path: Use the model already agreed upon in the block
+						print(f"Jumping to pre-calculated global model for block {block_to_process.return_block_idx()} (Memory Optimized)")
+						self.global_parameters = copy.deepcopy(block_transactions['global_update_params'])
+					elif finally_used_local_params:
+						# Original path: Perform full aggregation (used for the current round)
+						self.global_update(finally_used_local_params)
+					else:
+						print(f"There are no available local params for {self.idx} to perform global updates in this comm round.")
 				else:
 					print(f"Unfortunately, {self.role} {self.idx} goes offline when it's doing global_updates.")
 		processing_time = (time.time() - processing_time)/self.computation_power

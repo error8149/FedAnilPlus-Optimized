@@ -12,32 +12,34 @@ class Block:
 		self._miner_rsa_pub_key = miner_rsa_pub_key
 		self._mined_by = mined_by
 		self._mining_rewards = mining_rewards
+		# FedAnil+: Cache transaction hash for memory-efficient resyncing
+		import pickle
+		from hashlib import sha256
+		if transactions is not None:
+			self._transactions_hash = sha256(pickle.dumps(transactions)).hexdigest()
+		else:
+			self._transactions_hash = sha256(pickle.dumps([])).hexdigest()
+		
 		# validator specific
-		# self._is_validator_block = is_validator_block
 		# the hash of the current block, calculated by compute_hash
 		self._pow_proof = pow_proof
 		self._signature = signature
 
 	# compute_hash() also used to return value for block verification
-	# if False by default, used for pow and verification, in which pow_proof has to be None, because at this moment -
-	# pow - block hash is None, so does not affect much
-	# verification - the block already has its hash
-	# if hash_entire_block == True -> used in set_previous_block_hash, where we need to hash the whole previous block
 	def compute_hash(self, hash_entire_block=False):
-		# Optimized for 12GB RAM: Avoid giant string allocations of model weights
-		# We hash metadata and a summarized version of transactions if they are too heavy
+		# Optimized for 12GB RAM: Use cached transaction hash instead of raw data
 		if hash_entire_block:
-			# Use a more efficient way to hash if possible, or just be careful with the string
-			block_content = self.__dict__
+			# Use a version of dict that excludes the bulky raw transactions
+			block_content = {k: v for k, v in self.__dict__.items() if k != '_transactions'}
 		else:
-			# For PoW/Verification, we only need the fixed fields + hash of transactions
+			# For PoW/Verification, we only need the fixed fields + stored hash of transactions
 			block_content = {k: v for k, v in self.__dict__.items() if k not in ['_pow_proof', '_signature', '_mining_rewards', '_transactions']}
-			# Add a hash of the transactions instead of the transactions themselves
-			import pickle
-			tx_hash = sha256(pickle.dumps(self._transactions)).hexdigest()
-			block_content['_transactions_hash'] = tx_hash
+		
+		# Add the pre-calculated transaction hash (constant even after transactions are freed)
+		block_content['_transactions_hash'] = self._transactions_hash
 		
 		# Sort items for deterministic hashing
+		from hashlib import sha256
 		return sha256(str(sorted(block_content.items())).encode('utf-8')).hexdigest()
 
 	def return_block_dict_for_signature(self):
@@ -74,6 +76,10 @@ class Block:
 		# after verified in cross_verification()
 		# transactions can be both local_enterprises' or validators' transactions
 		self._transactions.append(transaction)
+		# Update cached hash after adding a transaction
+		import pickle
+		from hashlib import sha256
+		self._transactions_hash = sha256(pickle.dumps(self._transactions)).hexdigest()
 
 	def set_nonce(self, nonce):
 		self._nonce = nonce
@@ -97,15 +103,26 @@ class Block:
 	def return_mining_rewards(self):
 		return self._mining_rewards
 	
-	def return_transactions(self):
-		return self._transactions
-
-	# a temporary workaround to free GPU mem by delete txs stored in the blocks. Not good when need to resync chain
 	def free_tx(self):
+		# Optimized for 12GB RAM: Clear model weights but keep metadata for rewards/blacklisting
 		try:
-			del self._transactions
-		except:
-			pass
+			if hasattr(self, '_transactions') and self._transactions:
+				# 1. Clear individual local update params (very heavy)
+				for tx_list_key in ['valid_validator_sig_transacitons', 'invalid_validator_sig_transacitons']:
+					if tx_list_key in self._transactions:
+						for tx in self._transactions[tx_list_key]:
+							if 'local_updates_params' in tx:
+								# Clear the heavy weights but keep the transaction metadata
+								tx['local_updates_params'] = None
+				
+				# 2. We keep 'global_update_params' if we might need to "jump" to this model state
+				# but we could also clear it if Enterprise.py is modified to cache it elsewhere.
+				# For now, let's keep it as it's just one model per block, not dozens.
+		except Exception as e:
+			print(f"Error in free_tx: {e}")
 
-
-	
+	def return_transactions(self):
+		if not hasattr(self, '_transactions'):
+			# Fallback to prevent AttributeErrors if something went wrong
+			return {'valid_validator_sig_transacitons': [], 'invalid_validator_sig_transacitons': [], 'global_update_params': None}
+		return self._transactions
