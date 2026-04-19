@@ -316,7 +316,7 @@ else:
 		# Auto LR Decay: 50% every 8 rounds (Optimized for 90% target)
 		if comm_round > 1 and (comm_round - latest_round_num) % 8 == 0:
 			for e in enterprises_list:
-				e.learning_rate *= 0.5
+				e.set_learning_rate(e.learning_rate * 0.5)
 			print(f"\n[SYSTEM] Learning rate decayed to {enterprises_list[0].learning_rate:.6f} for round {comm_round}")
 		communication_bytes_per_round = 0
 		# create round specific log folder

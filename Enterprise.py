@@ -140,6 +140,12 @@ class Enterprise:
 		# for picking PoS legitimate blockd;bs
 		# self.stake_tracker = {} # used some tricks in main.py for ease of programming
 		self.mu = mu 
+		self.learning_rate = learning_rate
+
+	def set_learning_rate(self, new_lr):
+		self.learning_rate = new_lr
+		for param_group in self.opti.param_groups:
+			param_group['lr'] = new_lr
 		
 		# TPU Optimization: Pre-move data to device to avoid per-batch transfer overhead
 		if HAS_XLA and self.dev.type == 'xla':
