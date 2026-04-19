@@ -330,10 +330,10 @@ else:
 		elapsed = time.time() - simulation_start_time
 		if rounds_done > 0:
 			eta = (elapsed / rounds_done) * (total_rounds - rounds_done)
-			eta_str = f"{int(eta//60)}m {int(eta%60)}s"
+			eta_str = f"{int(eta//3600)}h {int((eta%3600)//60)}m {int(eta%60)}s"
 		else:
 			eta_str = "calculating..."
-		elapsed_str = f"{int(elapsed//60)}m {int(elapsed%60)}s"
+		elapsed_str = f"{int(elapsed//3600)}h {int((elapsed%3600)//60)}m {int(elapsed%60)}s"
 		bar_len = 30
 		filled = int(bar_len * progress)
 		bar = '█' * filled + '░' * (bar_len - filled)
