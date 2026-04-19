@@ -1013,6 +1013,10 @@ class Enterprise:
 				valid_indices = np.where(stg_scores >= (best_stg * 0.5))[0] 
 				
 				if len(valid_indices) < len(local_params_list):
+					if len(valid_indices) == 0:
+						print("WARNING: All active nodes have poor global alignment. Skipping this round to prevent model poisoning.")
+						self.global_time = time.time() - self.global_time
+						return
 					print(f"Pruned {len(local_params_list) - len(valid_indices)} outlier nodes with poor global alignment.")
 					local_params_list = [local_params_list[i] for i in valid_indices]
 					sim_matrix = sim_matrix[valid_indices]
