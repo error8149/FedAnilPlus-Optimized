@@ -260,7 +260,7 @@ else:
 	loss_func = F.cross_entropy
 
 	# 9. create enterprises in the network
-	enterprises_in_network = EnterprisesInNetwork(data_set_name='femnist', is_iid=args['IID'], batch_size = args['batchsize'], learning_rate =  args['learning_rate'], loss_func = loss_func, opti = args['optimizer'], num_enterprises=num_enterprises, network_stability=args['network_stability'], net=net, dev=dev, knock_out_rounds=args['knock_out_rounds'], lazy_local_enterprise_knock_out_rounds=args['lazy_local_enterprise_knock_out_rounds'], shard_test_data=args['shard_test_data'], miner_acception_wait_time=args['miner_acception_wait_time'], miner_accepted_transactions_size_limit=args['miner_accepted_transactions_size_limit'], validator_threshold=args['validator_threshold'], pow_difficulty=args['pow_difficulty'], even_link_speed_strength=args['even_link_speed_strength'], base_data_transmission_speed=args['base_data_transmission_speed'], even_computation_power=args['even_computation_power'], malicious_updates_discount=args['malicious_updates_discount'], num_malicious=num_malicious, noise_variance=args['noise_variance'], check_signature=args['check_signature'], not_resync_chain=args['destroy_tx_in_block'], mu=0.001, model_name=args['model_name'])
+	enterprises_in_network = EnterprisesInNetwork(data_set_name='femnist', is_iid=args['IID'], batch_size = args['batchsize'], learning_rate =  args['learning_rate'], loss_func = loss_func, opti = args['optimizer'], num_enterprises=num_enterprises, network_stability=args['network_stability'], net=net, dev=dev, knock_out_rounds=args['knock_out_rounds'], lazy_local_enterprise_knock_out_rounds=args['lazy_local_enterprise_knock_out_rounds'], shard_test_data=args['shard_test_data'], miner_acception_wait_time=args['miner_acception_wait_time'], miner_accepted_transactions_size_limit=args['miner_accepted_transactions_size_limit'], validator_threshold=args['validator_threshold'], pow_difficulty=args['pow_difficulty'], even_link_speed_strength=args['even_link_speed_strength'], base_data_transmission_speed=args['base_data_transmission_speed'], even_computation_power=args['even_computation_power'], malicious_updates_discount=args['malicious_updates_discount'], num_malicious=num_malicious, noise_variance=args['noise_variance'], check_signature=args['check_signature'], not_resync_chain=args['destroy_tx_in_block'], mu=args['mu'], model_name=args['model_name'])
 	del net
 	enterprises_list = list(enterprises_in_network.enterprises_set.values())
 
@@ -313,8 +313,8 @@ else:
 	total_rounds = args['max_num_comm'] - latest_round_num
 	simulation_start_time = time.time()
 	for comm_round in range(latest_round_num + 1, args['max_num_comm']+1):
-		# Auto LR Decay: 50% every 8 rounds to help settling on plateau
-		if comm_round > 1 and (comm_round - latest_round_num) % 8 == 0:
+		# Auto LR Decay: 50% every 10 rounds to allow initial convergence
+		if comm_round > 1 and (comm_round - latest_round_num) % 10 == 0:
 			for e in enterprises_list:
 				e.learning_rate *= 0.5
 			print(f"\n[SYSTEM] Learning rate decayed to {enterprises_list[0].learning_rate:.6f} for round {comm_round}")

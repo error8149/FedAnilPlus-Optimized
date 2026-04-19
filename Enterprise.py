@@ -1004,11 +1004,11 @@ class Enterprise:
 				sim_matrix = CombinedModel.compute_similarity_matrix(local_params_list, self.global_parameters, self.dev)
 				
 				# FedAnil+: Adaptive Aggregation
-				# If global similarity is extremely high, avoid splitting hair with clustering
-				# This restores original learning speed when nodes are mostly benign
+				# If global similarity is high, avoid splitting hair with clustering
+				# Relaxed to 0.95 to include core benign group more reliably
 				avg_global_sim = np.mean(sim_matrix)
-				if avg_global_sim > 0.98:
-					print(f"High Global Similarity ({avg_global_sim:.4f}) detected. Using inclusive aggregation for max speed.")
+				if avg_global_sim > 0.95:
+					print(f"High Global Similarity ({avg_global_sim:.4f}) detected. Using inclusive aggregation for max stability.")
 					num_participants = len(local_params_list)
 					sum_parameters = {}
 					for i, lp in enumerate(local_params_list):
@@ -1031,10 +1031,18 @@ class Enterprise:
 				
 				if num_clusters > 0:
 					print(f"Affinity Propagation found {num_clusters} clusters.")
-					# 3. Identify best cluster (highest average similarity)
-					cluster_scores = [np.mean(sim_matrix[labels == c]) for c in range(num_clusters)]
+					# 3. Identify best cluster (Weighted Score = Size * Similarity^2)
+					# This identifies the largest consistent group while filtering outliers.
+					cluster_scores = []
+					for c in range(num_clusters):
+						cluster_indices = (labels == c)
+						size = np.sum(cluster_indices)
+						avg_sim = np.mean(sim_matrix[cluster_indices])
+						# Score favors large clusters with high similarity
+						cluster_scores.append(size * (avg_sim ** 2))
+					
 					best_cluster_idx = np.argmax(cluster_scores)
-					print(f"Selected best cluster {best_cluster_idx} (Avg Similarity: {cluster_scores[best_cluster_idx]:.4f})")
+					print(f"Selected best cluster {best_cluster_idx} (Size: {np.sum(labels == best_cluster_idx)}, Avg Similarity: {np.mean(sim_matrix[labels == best_cluster_idx]):.4f})")
 					
 					# 4. Aggregate
 					self.global_parameters = CombinedModel.aggregate_best_cluster(local_params_list, labels, best_cluster_idx)
