@@ -145,6 +145,10 @@ class ConcatModel(nn.Module):
             if cur_k < 2: continue
             datakm = KMedoids(n_clusters=cur_k, random_state=0).fit(datas)
             best_kmedoids_data[var] = datakm
+            del datas
+        
+        import gc
+        gc.collect()
         return best_kmedoids_data
 class CombinedModel(nn.Module):
     def __init__(self, glove_model = glove, resnet_model = resnet50, cnn_model = cnn):
@@ -200,6 +204,10 @@ class CombinedModel(nn.Module):
             if cur_k < 2: continue
             datakm = KMedoids(n_clusters=cur_k, random_state=0).fit(datas)
             best_kmedoids_data[var] = datakm
+            del datas
+            
+        import gc
+        gc.collect()
         return best_kmedoids_data
     @staticmethod
     def compute_similarity_matrix(local_params_list, global_params, dev):

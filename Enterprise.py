@@ -10,6 +10,7 @@ from torch import optim
 import random
 import copy
 import time
+from tqdm.auto import tqdm
 from sys import getsizeof
 from Crypto.PublicKey import RSA
 from hashlib import sha256
@@ -138,6 +139,7 @@ class Enterprise:
 		self.untrustworthy_validators_record_by_comm_round = {}
 		# for picking PoS legitimate blockd;bs
 		# self.stake_tracker = {} # used some tricks in main.py for ease of programming
+		self.mu = kwargs.get('mu', 0.0) 
 		
 		# TPU Optimization: Pre-move data to device to avoid per-batch transfer overhead
 		if HAS_XLA and self.dev.type == 'xla':
@@ -824,12 +826,17 @@ class Enterprise:
 		for mt in self.model_type:
 			model_type_name = self.return_model_type(mt)
 			for epoch in range(local_epochs):
-				for data, label in self.train_dl:
+				for data, label in tqdm(self.train_dl, desc=f"Ent. {self.idx} (Epoch {epoch+1}/{local_epochs})", leave=False, ncols=80):
 					data, label = data.to(self.dev), label.to(self.dev)
 					# Mixed Precision Training for GPU speedup
 					with torch.cuda.amp.autocast(enabled=(self.dev.type == 'cuda')):
 						preds = self.net(data, model_type_name)
 						loss = self.loss_func(preds, label)
+						if self.mu > 0:
+							proximal_term = 0.0
+							for w, w_t in zip(self.net.parameters(), self.global_parameters.values()):
+								proximal_term += (w - w_t.to(self.dev)).norm(2) ** 2
+							loss += (self.mu / 2) * proximal_term
 					self.scaler.scale(loss).backward()
 					self.scaler.unscale_(self.opti)
 					# Gradient Clipping for training stability
@@ -1509,7 +1516,7 @@ class Enterprise:
 			else:
 				validation_opti = optim.Adam(updated_net.parameters(), lr=currently_used_lr, betas=(0.9, 0.9))
 			local_validation_time = time.time()
-			for data, label in self.train_dl:
+			for data, label in tqdm(self.train_dl, desc=f"Val. {self.idx} Local Epoch", leave=False, ncols=80):
 				data, label = data.to(self.dev), label.to(self.dev)
 				preds = updated_net(data)
 				loss = self.loss_func(preds, label)
@@ -1621,7 +1628,7 @@ class Enterprise:
 			return validation_time, transaction_to_validate
 
 class EnterprisesInNetwork(object):
-	def __init__(self, data_set_name, is_iid, batch_size, learning_rate, loss_func, opti, num_enterprises, network_stability, net, dev, knock_out_rounds, lazy_local_enterprise_knock_out_rounds, shard_test_data, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, malicious_updates_discount, num_malicious, noise_variance, check_signature, not_resync_chain):
+	def __init__(self, data_set_name, is_iid, batch_size, learning_rate, loss_func, opti, num_enterprises, network_stability, net, dev, knock_out_rounds, lazy_local_enterprise_knock_out_rounds, shard_test_data, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, malicious_updates_discount, num_malicious, noise_variance, check_signature, not_resync_chain, mu=0.0):
 		self.data_set_name = data_set_name
 		self.is_iid = is_iid
 		self.batch_size = batch_size
@@ -1645,6 +1652,7 @@ class EnterprisesInNetwork(object):
 		self.noise_variance = noise_variance
 		self.check_signature = check_signature
 		self.not_resync_chain = not_resync_chain
+		self.mu = mu
 		# distribute dataset
 		''' validator '''
 		self.validator_threshold = validator_threshold

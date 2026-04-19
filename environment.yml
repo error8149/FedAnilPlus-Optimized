@@ -1,0 +1,19 @@
+name: fedanilplus
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=11.8 # Update according to your system's CUDA version
+  - scikit-learn
+  - numpy
+  - pip
+  - pip:
+      - pycryptodome
+      - bitarray
+      - tenseal
