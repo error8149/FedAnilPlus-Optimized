@@ -1038,9 +1038,9 @@ else:
 			print(f"Saving network snapshot to {snapshot_file_path}")
 			pickle.dump(enterprises_in_network, open(snapshot_file_path, "wb"))
 		
-		# FedAnil+: if accuracy reach more than target accuracy the iteration finished
-		if total_accuracy >= target_accuracy:
-			break
+		# FedAnil+: Target accuracy break removed as per user request to allow higher convergence
+		# if total_accuracy >= target_accuracy:
+		# 	break
 	
 	with open(f'{log_files_folder_path}/Output.txt', 'w') as f:
 		# FedAnil+: Total Computation Cost (Seconds)
