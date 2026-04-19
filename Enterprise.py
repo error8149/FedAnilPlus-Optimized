@@ -62,7 +62,7 @@ def _deepcopy_tensors(obj):
 		return gpu_obj
 	return copy.deepcopy(obj)
 class Enterprise:
-	def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, learning_rate, loss_func, opti, network_stability, net, dev, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, is_malicious, noise_variance, check_signature, not_resync_chain, malicious_updates_discount, knock_out_rounds, lazy_local_enterprise_knock_out_rounds, mu=0.0):
+	def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, learning_rate, loss_func, opti, network_stability, net, dev, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, is_malicious, noise_variance, check_signature, not_resync_chain, malicious_updates_discount, knock_out_rounds, lazy_local_enterprise_knock_out_rounds, mu=0.0, model_name='cnn'):
 		self.idx = idx
 		# deep learning variables
 		self.train_ds = assigned_train_ds
@@ -165,7 +165,7 @@ class Enterprise:
 		self.local_update_time = None
 		self.local_total_epoch = 0
 		# FedAnil+: Training Models via Models Random Selection by Each Enterprise.
-		self.model_type = random.sample(m_type, random.randint(1, 3))
+		self.model_type = [model_name] # FedAnil+: Focus training on the requested model type for max accuracy
 		''' For validators '''
 		self.validator_associated_local_enterprise_set = set()
 		self.validation_rewards_this_round = 0
@@ -967,7 +967,9 @@ class Enterprise:
 					break
 				# Tensors are pre-loaded to dev during init if on TPU/GPU
 				data, label = data.to(self.dev), label.to(self.dev)
-				preds = self.net(data)
+				# FedAnil+: Use the correct branch of CombinedModel for evaluation
+				model_choice = self.model_type[0] if self.model_type else 'cnn'
+				preds = self.net(data, model_choice=model_choice)
 				preds = torch.argmax(preds, dim=1)
 				sum_accu += (preds == label).float().mean()
 				num += 1
@@ -1001,7 +1003,28 @@ class Enterprise:
 				local_params_list = [p for _, p in local_update_params_potentially_to_be_used if _ not in self.black_list]
 				sim_matrix = CombinedModel.compute_similarity_matrix(local_params_list, self.global_parameters, self.dev)
 				
-				# 2. Affinity Propagation Clustering
+				# FedAnil+: Adaptive Aggregation
+				# If global similarity is extremely high, avoid splitting hair with clustering
+				# This restores original learning speed when nodes are mostly benign
+				avg_global_sim = np.mean(sim_matrix)
+				if avg_global_sim > 0.98:
+					print(f"High Global Similarity ({avg_global_sim:.4f}) detected. Using inclusive aggregation for max speed.")
+					num_participants = len(local_params_list)
+					sum_parameters = {}
+					for i, lp in enumerate(local_params_list):
+						if i == 0:
+							for var, tensor in lp.items():
+								sum_parameters[var] = tensor.detach().clone()
+						else:
+							for var, tensor in lp.items():
+								sum_parameters[var] += tensor
+					for var in self.global_parameters:
+						self.global_parameters[var] = (sum_parameters[var] / num_participants)
+					print(f"Global updates (Greedy FedAvg) done by {self.idx}")
+					self.global_time = time.time() - self.global_time
+					return
+
+				# 2. Affinity Propagation Clustering (only if significant variance exists)
 				ap = AffinityPropagation(random_state=0).fit(sim_matrix)
 				labels = ap.labels_
 				num_clusters = len(ap.cluster_centers_indices_)
@@ -1629,7 +1652,8 @@ class Enterprise:
 			return validation_time, transaction_to_validate
 
 class EnterprisesInNetwork(object):
-	def __init__(self, data_set_name, is_iid, batch_size, learning_rate, loss_func, opti, num_enterprises, network_stability, net, dev, knock_out_rounds, lazy_local_enterprise_knock_out_rounds, shard_test_data, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, malicious_updates_discount, num_malicious, noise_variance, check_signature, not_resync_chain, mu=0.0):
+	def __init__(self, data_set_name, is_iid, batch_size, learning_rate, loss_func, opti, num_enterprises, network_stability, net, dev, knock_out_rounds, lazy_local_enterprise_knock_out_rounds, shard_test_data, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, malicious_updates_discount, num_malicious, noise_variance, check_signature, not_resync_chain, mu=0.0, model_name='cnn'):
+		self.model_name = model_name
 		self.data_set_name = data_set_name
 		self.is_iid = is_iid
 		self.batch_size = batch_size
@@ -1727,7 +1751,7 @@ class EnterprisesInNetwork(object):
 					test_data_loader = DataLoader(TensorDataset(torch.tensor(local_test_data), torch.tensor(local_test_label)), batch_size=128, shuffle=False, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,)), AddGaussianNoise(0., 0.2/len(malicious_nodes_set))]))
 			# assign data to a enterprise and put in the enterprises set
 			enterprise_idx = f'enterprise_{i+1}'
-			a_enterprise = Enterprise(enterprise_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.learning_rate, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.miner_acception_wait_time, self.miner_accepted_transactions_size_limit, self.validator_threshold, self.pow_difficulty, self.even_link_speed_strength, self.base_data_transmission_speed, self.even_computation_power, is_malicious, self.noise_variance, self.check_signature, self.not_resync_chain, self.malicious_updates_discount, self.knock_out_rounds, self.lazy_local_enterprise_knock_out_rounds, mu=self.mu)
+			a_enterprise = Enterprise(enterprise_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.learning_rate, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.miner_acception_wait_time, self.miner_accepted_transactions_size_limit, self.validator_threshold, self.pow_difficulty, self.even_link_speed_strength, self.base_data_transmission_speed, self.even_computation_power, is_malicious, self.noise_variance, self.check_signature, self.not_resync_chain, self.malicious_updates_discount, self.knock_out_rounds, self.lazy_local_enterprise_knock_out_rounds, mu=self.mu, model_name=self.model_name)
 			# enterprise index starts from 1
 			self.enterprises_set[enterprise_idx] = a_enterprise
 			print(f"Sharding dataset to {enterprise_idx} done.")
