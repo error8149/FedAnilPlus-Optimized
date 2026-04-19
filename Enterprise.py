@@ -834,8 +834,9 @@ class Enterprise:
 						loss = self.loss_func(preds, label)
 						if self.mu > 0:
 							proximal_term = 0.0
-							for w, w_t in zip(self.net.parameters(), self.global_parameters.values()):
-								proximal_term += (w - w_t.to(self.dev)).norm(2) ** 2
+							for name, param in self.net.named_parameters():
+								if param.requires_grad and name in self.global_parameters:
+									proximal_term += (param - self.global_parameters[name].to(self.dev)).norm(2) ** 2
 							loss += (self.mu / 2) * proximal_term
 					self.scaler.scale(loss).backward()
 					self.scaler.unscale_(self.opti)
