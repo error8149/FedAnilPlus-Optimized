@@ -818,6 +818,7 @@ else:
 
 		print(''' Step 6 - miners decide if adding a propagated block or its own mined block as the legitimate block, and request its associated enterprises to download this block''')
 		# Forking Prevention for Optimized Runs
+		forking_happened = False
 		comm_round_block_gen_time = []
 		global_winning_block = None
 		earliest_mining_time = float('inf')
