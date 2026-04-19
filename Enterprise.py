@@ -62,7 +62,7 @@ def _deepcopy_tensors(obj):
 		return gpu_obj
 	return copy.deepcopy(obj)
 class Enterprise:
-	def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, learning_rate, loss_func, opti, network_stability, net, dev, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, is_malicious, noise_variance, check_signature, not_resync_chain, malicious_updates_discount, knock_out_rounds, lazy_local_enterprise_knock_out_rounds):
+	def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, learning_rate, loss_func, opti, network_stability, net, dev, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, is_malicious, noise_variance, check_signature, not_resync_chain, malicious_updates_discount, knock_out_rounds, lazy_local_enterprise_knock_out_rounds, mu=0.0):
 		self.idx = idx
 		# deep learning variables
 		self.train_ds = assigned_train_ds
@@ -139,7 +139,7 @@ class Enterprise:
 		self.untrustworthy_validators_record_by_comm_round = {}
 		# for picking PoS legitimate blockd;bs
 		# self.stake_tracker = {} # used some tricks in main.py for ease of programming
-		self.mu = kwargs.get('mu', 0.0) 
+		self.mu = mu 
 		
 		# TPU Optimization: Pre-move data to device to avoid per-batch transfer overhead
 		if HAS_XLA and self.dev.type == 'xla':
@@ -1726,7 +1726,7 @@ class EnterprisesInNetwork(object):
 					test_data_loader = DataLoader(TensorDataset(torch.tensor(local_test_data), torch.tensor(local_test_label)), batch_size=128, shuffle=False, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,)), AddGaussianNoise(0., 0.2/len(malicious_nodes_set))]))
 			# assign data to a enterprise and put in the enterprises set
 			enterprise_idx = f'enterprise_{i+1}'
-			a_enterprise = Enterprise(enterprise_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.learning_rate, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.miner_acception_wait_time, self.miner_accepted_transactions_size_limit, self.validator_threshold, self.pow_difficulty, self.even_link_speed_strength, self.base_data_transmission_speed, self.even_computation_power, is_malicious, self.noise_variance, self.check_signature, self.not_resync_chain, self.malicious_updates_discount, self.knock_out_rounds, self.lazy_local_enterprise_knock_out_rounds)
+			a_enterprise = Enterprise(enterprise_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.learning_rate, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.miner_acception_wait_time, self.miner_accepted_transactions_size_limit, self.validator_threshold, self.pow_difficulty, self.even_link_speed_strength, self.base_data_transmission_speed, self.even_computation_power, is_malicious, self.noise_variance, self.check_signature, self.not_resync_chain, self.malicious_updates_discount, self.knock_out_rounds, self.lazy_local_enterprise_knock_out_rounds, mu=self.mu)
 			# enterprise index starts from 1
 			self.enterprises_set[enterprise_idx] = a_enterprise
 			print(f"Sharding dataset to {enterprise_idx} done.")
