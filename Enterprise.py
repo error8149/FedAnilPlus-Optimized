@@ -1003,12 +1003,25 @@ class Enterprise:
 				local_params_list = [p for _, p in local_update_params_potentially_to_be_used if _ not in self.black_list]
 				sim_matrix = CombinedModel.compute_similarity_matrix(local_params_list, self.global_parameters, self.dev)
 				
-				# FedAnil+: Adaptive Aggregation
-				# If global similarity is high, avoid splitting hair with clustering
-				# Relaxed to 0.95 to include core benign group more reliably
-				avg_global_sim = np.mean(sim_matrix)
-				if avg_global_sim > 0.95:
-					print(f"High Global Similarity ({avg_global_sim:.4f}) detected. Using inclusive aggregation for max stability.")
+				# FedAnil+: Strict Global-Alignment Pre-Filter
+				# We discard any node that is moving away from the global model objective.
+				# Similarity matrix is computed against the current global parameters.
+				stg_scores = np.mean(sim_matrix, axis=1) # Similarity to Global across all layers
+				
+				# Adaptive threshold: any node significantly worse than the best nodes is discarded
+				best_stg = np.max(stg_scores)
+				valid_indices = np.where(stg_scores >= (best_stg * 0.5))[0] 
+				
+				if len(valid_indices) < len(local_params_list):
+					print(f"Pruned {len(local_params_list) - len(valid_indices)} outlier nodes with poor global alignment.")
+					local_params_list = [local_params_list[i] for i in valid_indices]
+					sim_matrix = sim_matrix[valid_indices]
+					stg_scores = stg_scores[valid_indices]
+				
+				# High Global Similarity inclusive aggregation
+				avg_global_sim = np.mean(stg_scores)
+				if avg_global_sim > 0.96:
+					print(f"Strong Global Alignment ({avg_global_sim:.4f}) detected. Using inclusive FedAvg.")
 					num_participants = len(local_params_list)
 					sum_parameters = {}
 					for i, lp in enumerate(local_params_list):
@@ -1031,18 +1044,18 @@ class Enterprise:
 				
 				if num_clusters > 0:
 					print(f"Affinity Propagation found {num_clusters} clusters.")
-					# 3. Identify best cluster (Weighted Score = Size * Similarity^2)
-					# This identifies the largest consistent group while filtering outliers.
+					# 3. Identify best cluster (Weighted Score = Size * (Avg_Similarity_to_Global^2))
+					# This identifies the largest group that is also most aligned with the global objective.
 					cluster_scores = []
 					for c in range(num_clusters):
 						cluster_indices = (labels == c)
 						size = np.sum(cluster_indices)
-						avg_sim = np.mean(sim_matrix[cluster_indices])
-						# Score favors large clusters with high similarity
-						cluster_scores.append(size * (avg_sim ** 2))
+						avg_stg = np.mean(stg_scores[cluster_indices])
+						# Squared similarity rewards high alignment disproportionately
+						cluster_scores.append(size * (avg_stg ** 2))
 					
 					best_cluster_idx = np.argmax(cluster_scores)
-					print(f"Selected best cluster {best_cluster_idx} (Size: {np.sum(labels == best_cluster_idx)}, Avg Similarity: {np.mean(sim_matrix[labels == best_cluster_idx]):.4f})")
+					print(f"Selected best cluster {best_cluster_idx} (Size: {np.sum(labels == best_cluster_idx)}, Global Alignment: {np.mean(stg_scores[labels == best_cluster_idx]):.4f})")
 					
 					# 4. Aggregate
 					self.global_parameters = CombinedModel.aggregate_best_cluster(local_params_list, labels, best_cluster_idx)
