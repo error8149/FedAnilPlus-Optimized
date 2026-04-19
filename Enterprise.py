@@ -397,8 +397,7 @@ class Enterprise:
 		return accumulated_stake
 
 	def resync_chain(self, mining_consensus):
-		if self.not_resync_chain:
-			return # temporary workaround to save GPU memory
+		# Forced resync enabled for 90% accuracy optimization
 		if mining_consensus == 'PoW':
 			self.pow_resync_chain()
 		else:
@@ -1014,16 +1013,16 @@ class Enterprise:
 				# Similarity matrix is computed against the current global parameters.
 				stg_scores = np.mean(sim_matrix, axis=1) # Similarity to Global across all layers
 				
-				# Adaptive threshold: any node significantly worse than the best nodes is discarded
+				# Adaptive threshold: any node significantly worse than the best nodes is discarded (Tighter for 90% goal)
 				best_stg = np.max(stg_scores)
-				valid_indices = np.where(stg_scores >= (best_stg * 0.5))[0] 
+				valid_indices = np.where(stg_scores >= (best_stg * 0.85))[0] 
 				
 				if len(valid_indices) < len(local_params_list):
 					if len(valid_indices) == 0:
 						print("WARNING: All active nodes have poor global alignment. Skipping this round to prevent model poisoning.")
 						self.global_time = time.time() - self.global_time
 						return
-					print(f"Pruned {len(local_params_list) - len(valid_indices)} outlier nodes with poor global alignment.")
+					print(f"Pruned {len(local_params_list) - len(valid_indices)} outlier nodes with poor global alignment (Threshold: {best_stg*0.85:.4f}).")
 					local_params_list = [local_params_list[i] for i in valid_indices]
 					sim_matrix = sim_matrix[valid_indices]
 					stg_scores = stg_scores[valid_indices]
@@ -1641,7 +1640,8 @@ class Enterprise:
 				is_malicious_validator = "M" if self.is_malicious else "B"
 				with open(f"{log_files_folder_path_comm_round}/validator_{self.idx}_{is_malicious_validator}_validation_records_comm_{comm_round}.txt", "a") as file:
 					is_malicious_node = "M" if self.enterprises_dict[local_enterprise_transaction_enterprise_idx].return_is_malicious() else "B"
-				if accuracy_by_applying_local_enterprise_update - accuracy_by_validator_updated_model < self.validator_threshold * -1:
+				# Strict Validation: Reject if accuracy drops by more than validator_threshold (e.g., 0.05)
+				if (accuracy_by_validator_updated_model - accuracy_by_applying_local_enterprise_update) > self.validator_threshold:
 					transaction_to_validate['update_direction'] = False
 					print(f"NOTE: local_enterprise {local_enterprise_transaction_enterprise_idx}'s updates is deemed as suspiciously malicious by validator {self.idx}")
 					# is it right?

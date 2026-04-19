@@ -69,7 +69,7 @@ parser.add_argument('-pow', '--pow_difficulty', type=int, default=0, help="if se
 parser.add_argument('-mt', '--miner_acception_wait_time', type=float, default=0.0, help="default time window for miners to accept transactions, in seconds. 0 means no time limit, and each enterprise will just perform same amount(-le) of epochs per round like in FedAvg paper")
 parser.add_argument('-ml', '--miner_accepted_transactions_size_limit', type=float, default=0.0, help="no further transactions will be accepted by miner after this limit. 0 means no size limit. either this or -mt has to be specified, or both. This param determines the final block_size")
 parser.add_argument('-mp', '--miner_pos_propagated_block_wait_time', type=float, default=float("inf"), help="this wait time is counted from the beginning of the comm round, used to simulate forking events in PoS")
-parser.add_argument('-vh', '--validator_threshold', type=float, default=1.0, help="a threshold value of accuracy difference to determine malicious local_enterprise")
+parser.add_argument('-vh', '--validator_threshold', type=float, default=0.05, help="a threshold value of accuracy difference to determine malicious local_enterprise")
 parser.add_argument('-md', '--malicious_updates_discount', type=float, default=0.0, help="do not entirely drop the voted negative local_enterprise transaction because that risks the same local_enterprise dropping the entire transactions and repeat its accuracy again and again and will be kicked out. Apply a discount factor instead to the false negative local_enterprise's updates are by some rate applied so it won't repeat")
 parser.add_argument('-mv', '--malicious_validator_on', type=int, default=0, help="let malicious validator flip voting result")
 
@@ -313,6 +313,11 @@ else:
 	total_rounds = args['max_num_comm'] - latest_round_num
 	simulation_start_time = time.time()
 	for comm_round in range(latest_round_num + 1, args['max_num_comm']+1):
+		# Forced resync at round start to prevent forking divergence
+		print(f"\n[SYSTEM] Round {comm_round}: Syncing all nodes to longest valid chain...")
+		for e in enterprises_list:
+			e.resync_chain(mining_consensus)
+		
 		# Auto LR Decay: 50% every 8 rounds (Optimized for 90% target)
 		if comm_round > 1 and (comm_round - latest_round_num) % 8 == 0:
 			for e in enterprises_list:
