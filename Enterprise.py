@@ -825,8 +825,8 @@ class Enterprise:
 		# FedAnil+: Training the models that were selected.
 		for mt in self.model_type:
 			model_type_name = self.return_model_type(mt)
-			for epoch in range(local_epochs):
-				for data, label in tqdm(self.train_dl, desc=f"Ent. {self.idx} (Epoch {epoch+1}/{local_epochs})", leave=False, ncols=80):
+			for epoch in tqdm(range(local_epochs), desc=f"Ent. {self.idx} Epochs", leave=False, ncols=80):
+				for data, label in self.train_dl:
 					data, label = data.to(self.dev), label.to(self.dev)
 					# Mixed Precision Training for GPU speedup
 					with torch.cuda.amp.autocast(enabled=(self.dev.type == 'cuda')):
@@ -1517,7 +1517,7 @@ class Enterprise:
 			else:
 				validation_opti = optim.Adam(updated_net.parameters(), lr=currently_used_lr, betas=(0.9, 0.9))
 			local_validation_time = time.time()
-			for data, label in tqdm(self.train_dl, desc=f"Val. {self.idx} Local Epoch", leave=False, ncols=80):
+			for data, label in self.train_dl:
 				data, label = data.to(self.dev), label.to(self.dev)
 				preds = updated_net(data)
 				loss = self.loss_func(preds, label)
