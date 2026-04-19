@@ -825,7 +825,7 @@ class Enterprise:
 		# FedAnil+: Training the models that were selected.
 		for mt in self.model_type:
 			model_type_name = self.return_model_type(mt)
-			for epoch in tqdm(range(local_epochs), desc=f"Ent. {self.idx} Epochs", leave=False, ncols=80):
+			for epoch in tqdm(range(local_epochs), desc=f"Ent. {self.idx} Epochs", position=2, leave=False, ncols=80):
 				for data, label in self.train_dl:
 					data, label = data.to(self.dev), label.to(self.dev)
 					# Mixed Precision Training for GPU speedup
