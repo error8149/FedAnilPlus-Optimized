@@ -774,10 +774,19 @@ else:
 				# Optimized: Cleanup memory after each miner's verification loop
 				gc.collect()
 				torch.cuda.empty_cache()
-				# FedAnil+: add global params to transaction of block
+				# FedAnil+: Pre-calculate the current round's global update to record in the block
+				finally_used_local_params = []
+				for tx in valid_validator_sig_candidate_transacitons:
+					finally_used_local_params.append((tx['local_enterprise_enterprise_idx'], tx['local_updates_params']))
+				
+				# Miner updates its state now so it can save the RESULT in the block
+				if finally_used_local_params:
+					miner.global_update(finally_used_local_params)
+				
 				transactions_to_record_in_block = {}
 				transactions_to_record_in_block['valid_validator_sig_transacitons'] = valid_validator_sig_candidate_transacitons
 				transactions_to_record_in_block['invalid_validator_sig_transacitons'] = invalid_validator_sig_candidate_transacitons
+				# Record the UPDATED model in the block
 				transactions_to_record_in_block['global_update_params'] = miner.return_global_parametesrs()
 				# put transactions into candidate block and begin mining
 				# block index starts from 1

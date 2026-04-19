@@ -737,12 +737,15 @@ class Enterprise:
 				has_precalc_params = ('global_update_params' in block_transactions and block_transactions['global_update_params'] is not None)
 				
 				if self.online_switcher():
-					if has_precalc_params and (not finally_used_local_params or when_resync):
-						# Fast-path: Use the model already agreed upon in the block
-						print(f"Jumping to pre-calculated global model for block {block_to_process.return_block_idx()} (Memory Optimized)")
+					if has_precalc_params:
+						# FedAnil+: Global Model Synchronized Jump
+						# This ensures 100% network synchronization by adopting the model state calculated by the miner.
+						# It also saves significant RAM and CPU by avoiding redundant aggregation on every node.
+						if when_resync:
+							print(f"Resync-Jump to synchronized global model for block {block_to_process.return_block_idx()}")
 						self.global_parameters = copy.deepcopy(block_transactions['global_update_params'])
 					elif finally_used_local_params:
-						# Original path: Perform full aggregation (used for the current round)
+						# Original path: Perform full aggregation (used for current round or legacy blocks)
 						self.global_update(finally_used_local_params)
 					else:
 						print(f"There are no available local params for {self.idx} to perform global updates in this comm round.")
