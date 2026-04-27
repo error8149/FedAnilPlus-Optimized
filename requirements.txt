@@ -1,0 +1,7 @@
+pycryptodome
+bitarray
+tenseal
+numpy
+torch
+torchvision
+scikit-learn
