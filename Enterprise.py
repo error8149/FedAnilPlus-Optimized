@@ -36,7 +36,10 @@ from sklearn.cluster import AffinityPropagation
 import sys
 import warnings
 
-import tenseal as ts
+try:
+    import tenseal as ts
+except ImportError:
+    pass
 
 import torch.nn as nn
 
@@ -990,7 +993,7 @@ class Enterprise:
 				# Tensors are pre-loaded to dev during init if on TPU/GPU
 				data, label = data.to(self.dev), label.to(self.dev)
 				# FedAnil+: Use the correct branch of CombinedModel for evaluation
-				model_choice = self.model_type[0] if self.model_type else 'cnn'
+				model_choice = self.model_type if self.model_type in ["glove", "resnet", "cnn"] else 'cnn'
 				preds = self.net(data, model_choice=model_choice)
 				preds = torch.argmax(preds, dim=1)
 				sum_accu += (preds == label).float().mean()
@@ -1467,6 +1470,8 @@ class Enterprise:
 	
 	# FedAnil+: Homomorphic encryption 
 	def homomorphic_encryption(self):
+		if 'ts' not in globals():
+			return
 		context = ts.context(ts.SCHEME_TYPE.CKKS, poly_modulus_degree=8192, coeff_mod_bit_sizes=[60, 40, 40, 60])
 		context.generate_galois_keys()
 		context.global_scale = 2**40

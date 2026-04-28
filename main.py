@@ -107,6 +107,9 @@ if torch.cuda.is_available():
     print(f"System: NVIDIA GPU Detected.")
     print(f"Device Name: {torch.cuda.get_device_name(gpu_id)}")
     torch.backends.cudnn.benchmark = True
+elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+    dev = torch.device("mps")
+    print("System: Apple Silicon GPU (MPS) Detected.")
 elif HAS_XLA:
     try:
         dev = xm.xla_device()
@@ -116,7 +119,8 @@ elif HAS_XLA:
         print(f"System: TPU Error ({e}). Falling back to CPU.")
 else:
     dev = torch.device("cpu")
-    print("System: No NVIDIA GPU or TPU detected. Falling back to CPU.")
+    print("System: No NVIDIA/Apple GPU or TPU detected. Falling back to CPU.")
+
 
 # pre-define system variables
 latest_round_num = 0
